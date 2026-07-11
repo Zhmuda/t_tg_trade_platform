@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     telegram_bot_token: str
+    # Some hosts (e.g. Russian VPS providers) can't reach api.telegram.org directly - set
+    # this to an HTTP proxy URL (http://user:pass@host:port) to route Bot API calls through it.
+    telegram_proxy_url: str = ""
     master_encryption_key: str
     database_url: str = "sqlite+aiosqlite:///./data/bot.db"
     newsapi_key: str = ""

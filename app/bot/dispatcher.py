@@ -1,4 +1,5 @@
 from aiogram import Bot, Dispatcher
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from app.bot.handlers import backtest, news, onboarding, strategies, trading
@@ -8,7 +9,8 @@ from app.config import get_settings
 
 def build_bot_and_dispatcher() -> tuple[Bot, Dispatcher]:
     settings = get_settings()
-    bot = Bot(token=settings.telegram_bot_token)
+    session = AiohttpSession(proxy=settings.telegram_proxy_url or None)
+    bot = Bot(token=settings.telegram_bot_token, session=session)
     dp = Dispatcher(storage=MemoryStorage())
 
     dp.message.middleware(ErrorHandlingMiddleware())
