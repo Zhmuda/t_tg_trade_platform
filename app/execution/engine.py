@@ -13,12 +13,13 @@ from t_tech.invest import (
 from t_tech.invest.utils import now, quotation_to_decimal
 
 from app.broker.candles import get_candles_df
-from app.broker.client import client_context, ensure_account_id
+from app.broker.client import client_context, ensure_account_id, get_rub_balance
 from app.broker.instruments import resolve_ticker
 from app.db.crypto import decrypt_token
 from app.db.models import OrderDirection as DbOrderDirection, StrategyInstance, TradingMode
 from app.db.repository import (
     get_broker_credential,
+    latest_order,
     latest_sentiment,
     record_order,
     record_trade,
@@ -47,13 +48,6 @@ def _candle_row(candle) -> dict:
         "close": float(quotation_to_decimal(candle.close)),
         "volume": candle.volume,
     }
-
-
-def _rub_balance(positions_response) -> float:
-    for money in positions_response.money:
-        if money.currency == "rub":
-            return float(quotation_to_decimal(money))
-    return 0.0
 
 
 async def _place_market_order(client, account_id: str, figi: str, lots: int, direction):
@@ -106,7 +100,24 @@ async def run_strategy_instance(instance_id: int) -> None:
         buffer = await get_candles_df(client, instance.figi, warmup_from, now(), _HISTORY_INTERVAL)
         buffer = buffer.tail(_MAX_BUFFER_BARS).reset_index(drop=True)
 
-        position = Position()
+        async with get_session() as session:
+            last_order = await latest_order(session, instance_id)
+        if last_order is not None and last_order.direction == DbOrderDirection.BUY:
+            # Re-launched (container restart or /resume) while still holding shares from a
+            # prior run - reconstruct the open position instead of losing track of it and
+            # risking a duplicate BUY on the next signal.
+            position = Position(
+                is_open=True,
+                entry_price=last_order.price,
+                lots=last_order.lots,
+                entry_time=pd.Timestamp(last_order.created_at),
+            )
+            logger.info(
+                "Strategy instance %s: восстановлена открытая позиция %s лот(ов) по %.2f",
+                instance_id, last_order.lots, last_order.price,
+            )
+        else:
+            position = Position()
         realized_pnl_today = 0.0
         day_start_equity: float | None = None
         current_day = None
@@ -137,7 +148,7 @@ async def run_strategy_instance(instance_id: int) -> None:
                 continue
 
             positions_response = await client.operations.get_positions(account_id=account_id)
-            available_cash = _rub_balance(positions_response)
+            available_cash = get_rub_balance(positions_response)
 
             bar_day = pd.Timestamp(row["time"]).date()
             if current_day is None or bar_day != current_day:

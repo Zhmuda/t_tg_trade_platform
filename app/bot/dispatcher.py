@@ -1,15 +1,29 @@
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import BotCommand
 
 from app.bot.handlers import backtest, news, onboarding, strategies, trading
 from app.bot.middlewares import ErrorHandlingMiddleware
 from app.config import get_settings
 
+BOT_COMMANDS = [
+    BotCommand(command="start", description="Подключить/обновить токены"),
+    BotCommand(command="strategies", description="Список доступных стратегий"),
+    BotCommand(command="backtest", description="Бэктест стратегии на истории"),
+    BotCommand(command="demo", description="Запустить демо-торговлю (Sandbox)"),
+    BotCommand(command="trade", description="Запустить реальную торговлю"),
+    BotCommand(command="positions", description="Мои запущенные стратегии"),
+    BotCommand(command="resume", description="Возобновить остановленную стратегию по ID"),
+    BotCommand(command="stop", description="Остановить стратегию по ID"),
+    BotCommand(command="stop_all", description="Остановить все мои стратегии"),
+    BotCommand(command="news", description="Новостной сентимент по тикеру"),
+]
+
 
 def build_bot_and_dispatcher() -> tuple[Bot, Dispatcher]:
     settings = get_settings()
-    session = AiohttpSession(proxy=settings.telegram_proxy_url or None)
+    session = AiohttpSession(proxy=settings.outbound_proxy_url or None)
     bot = Bot(token=settings.telegram_bot_token, session=session)
     dp = Dispatcher(storage=MemoryStorage())
 

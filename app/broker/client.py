@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from t_tech.invest import AsyncClient, MoneyValue
 from t_tech.invest.sandbox.async_client import AsyncSandboxClient
-from t_tech.invest.utils import decimal_to_quotation
+from t_tech.invest.utils import decimal_to_quotation, quotation_to_decimal
 
 from app.db.models import TradingMode
 
@@ -44,3 +44,11 @@ async def ensure_account_id(client, mode: TradingMode, existing_account_id: str 
         amount=MoneyValue(units=quotation.units, nano=quotation.nano, currency="rub"),
     )
     return account_id
+
+
+def get_rub_balance(positions_response) -> float:
+    """Free RUB cash from a client.operations.get_positions(...) response."""
+    for money in positions_response.money:
+        if money.currency == "rub":
+            return float(quotation_to_decimal(money))
+    return 0.0

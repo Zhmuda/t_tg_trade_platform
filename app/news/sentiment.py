@@ -22,7 +22,10 @@ def _get_client() -> genai.Client | None:
     if not settings.gemini_api_key:
         return None
     if _client is None:
-        _client = genai.Client(api_key=settings.gemini_api_key)
+        http_options = None
+        if settings.outbound_proxy_url:
+            http_options = types.HttpOptions(async_client_args={"proxy": settings.outbound_proxy_url})
+        _client = genai.Client(api_key=settings.gemini_api_key, http_options=http_options)
     return _client
 
 

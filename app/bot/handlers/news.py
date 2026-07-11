@@ -4,6 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from app.bot.states import NewsFlow
+from app.config import get_settings
 from app.news.worker import compute_ticker_sentiment
 
 router = Router(name="news")
@@ -45,7 +46,14 @@ async def choose_period(callback: CallbackQuery, state: FSMContext) -> None:
 
     result = await compute_ticker_sentiment(ticker, days=days)
     if result is None:
-        await callback.message.answer("Не нашлось новостей за этот период (или не задан NEWSAPI_KEY в .env).")
+        settings = get_settings()
+        if not settings.newsapi_key:
+            reason = "не задан NEWSAPI_KEY в .env"
+        elif not settings.gemini_api_key:
+            reason = "не задан GEMINI_API_KEY в .env"
+        else:
+            reason = "новостей за этот период не нашлось, либо не удалось получить оценку от Gemini — подробности в логах контейнера"
+        await callback.message.answer(f"Не удалось посчитать сентимент по {ticker}: {reason}.")
         return
 
     avg_score, sample_size = result

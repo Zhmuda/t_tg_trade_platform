@@ -160,6 +160,18 @@ async def record_trade(
     return trade
 
 
+async def latest_order(session: AsyncSession, strategy_instance_id: int) -> Order | None:
+    """Most recent order for a strategy instance - a trailing BUY with no later SELL
+    means the strategy is currently holding an open position."""
+    stmt = (
+        select(Order)
+        .where(Order.strategy_instance_id == strategy_instance_id)
+        .order_by(Order.created_at.desc())
+        .limit(1)
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
 async def todays_realized_pnl(session: AsyncSession, strategy_instance_id: int) -> float:
     """Sum of pnl for trades closed today (UTC) for this strategy instance.
 

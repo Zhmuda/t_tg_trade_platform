@@ -2,7 +2,7 @@ import asyncio
 import logging
 
 from app.bootstrap import provision_owner_tokens_from_env
-from app.bot.dispatcher import build_bot_and_dispatcher
+from app.bot.dispatcher import BOT_COMMANDS, build_bot_and_dispatcher
 from app.db.repository import reset_stale_running_instances
 from app.db.session import get_session, init_db
 from app.news.worker import run_sentiment_worker
@@ -21,6 +21,7 @@ async def main() -> None:
         logger.info("Сброшен статус %s стратегий, оставшихся 'running' с прошлого запуска процесса", reset_count)
 
     bot, dp = build_bot_and_dispatcher()
+    await bot.set_my_commands(BOT_COMMANDS)
 
     await asyncio.gather(
         run_sentiment_worker(),
