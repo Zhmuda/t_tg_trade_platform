@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tinvest-trading-bot"
+version = "0.1.0"
+description = "Telegram-controlled intraday trading bot for T-Invest (Tinkoff Invest API): backtesting, sandbox demo trading, and live trading"
+requires-python = ">=3.10"
+dependencies = [
+    "aiogram>=3.4,<4",
+    "t-tech-investments>=1.49",
+    "SQLAlchemy>=2.0,<3",
+    "aiosqlite>=0.19",
+    "pydantic-settings>=2.2,<3",
+    "cryptography>=42",
+    "pandas>=2.1",
+    "numpy>=1.26",
+    "ta>=0.11",
+    "matplotlib>=3.8",
+    "httpx>=0.27",
+    "google-genai>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
