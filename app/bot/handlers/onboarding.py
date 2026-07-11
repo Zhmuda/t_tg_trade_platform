@@ -3,6 +3,7 @@ from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from app.bot.keyboards import main_menu_keyboard
 from app.bot.states import TokenStates
 from app.db.models import TradingMode
 from app.db.repository import get_or_create_user, save_broker_credential
@@ -37,6 +38,7 @@ async def cmd_start(message: Message) -> None:
         "/news <тикер> — новостной сентимент",
         reply_markup=keyboard,
     )
+    await message.answer("Меню команд снизу — можно нажимать вместо ввода текста.", reply_markup=main_menu_keyboard())
 
 
 @router.callback_query(F.data.startswith("set_token:"))

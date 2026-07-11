@@ -36,3 +36,15 @@ class SmaCrossStrategy(Strategy):
         if crossed_down and position.is_open:
             return Signal(Action.SELL, reason=f"SMA{self.fast_window} пересекла SMA{self.slow_window} сверху вниз")
         return Signal(Action.HOLD)
+
+
+class SmaCrossTestStrategy(SmaCrossStrategy):
+    """Same crossover logic as SmaCrossStrategy but with much shorter windows (2/5 bars
+    instead of 10/30), so on 1-minute candles crossovers - and orders - happen within
+    minutes instead of potentially never during a short test session. For validating the
+    demo/live order-placement pipeline end-to-end, not for real trading."""
+
+    name = "sma_cross_test"
+
+    def __init__(self, fast_window: int = 2, slow_window: int = 5, **params):
+        super().__init__(fast_window=fast_window, slow_window=slow_window, **params)

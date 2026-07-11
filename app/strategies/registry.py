@@ -3,10 +3,11 @@ from app.strategies.bollinger_breakout import BollingerBreakoutStrategy
 from app.strategies.macd_momentum import MacdMomentumStrategy
 from app.strategies.rsi_reversion import RsiReversionStrategy
 from app.strategies.sentiment_filter import SentimentFilteredStrategy
-from app.strategies.sma_cross import SmaCrossStrategy
+from app.strategies.sma_cross import SmaCrossStrategy, SmaCrossTestStrategy
 
 BASE_STRATEGIES: dict[str, type[Strategy]] = {
     SmaCrossStrategy.name: SmaCrossStrategy,
+    SmaCrossTestStrategy.name: SmaCrossTestStrategy,
     RsiReversionStrategy.name: RsiReversionStrategy,
     MacdMomentumStrategy.name: MacdMomentumStrategy,
     BollingerBreakoutStrategy.name: BollingerBreakoutStrategy,

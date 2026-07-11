@@ -105,13 +105,26 @@ async def confirm_real_trading(message: Message, state: FSMContext) -> None:
 async def cmd_resume(message: Message, state: FSMContext) -> None:
     args = message.text.split()[1:]
     if not args or not args[0].isdigit():
-        await message.answer("Укажите ID стратегии: /resume 3 (номер см. в /positions)")
+        async with get_session() as session:
+            instances = await list_strategy_instances(session, message.from_user.id)
+        stopped = [inst for inst in instances if not manager.is_running(inst.id)]
+        if not stopped:
+            await message.answer("Нечего возобновлять — нет остановленных стратегий.")
+            return
+        buttons = [
+            [InlineKeyboardButton(text=f"#{inst.id} {inst.strategy_name} на {inst.ticker}", callback_data=f"resume_id:{inst.id}")]
+            for inst in stopped
+        ]
+        await message.answer("Какую стратегию возобновить?", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
         return
     instance_id = int(args[0])
+    await _resume_instance(message, state, instance_id, message.from_user.id)
 
+
+async def _resume_instance(message: Message, state: FSMContext, instance_id: int, user_id: int) -> None:
     async with get_session() as session:
         instance = await session.get(StrategyInstance, instance_id)
-    if instance is None or instance.user_id != message.from_user.id:
+    if instance is None or instance.user_id != user_id:
         await message.answer("Стратегия с таким ID не найдена среди ваших.")
         return
     if manager.is_running(instance_id):
@@ -133,6 +146,13 @@ async def cmd_resume(message: Message, state: FSMContext) -> None:
         if started
         else "Не удалось возобновить — попробуйте ещё раз."
     )
+
+
+@router.callback_query(F.data.startswith("resume_id:"))
+async def resume_via_button(callback: CallbackQuery, state: FSMContext) -> None:
+    instance_id = int(callback.data.split(":", 1)[1])
+    await callback.answer()
+    await _resume_instance(callback.message, state, instance_id, callback.from_user.id)
 
 
 @router.message(StrategyFlow.confirming_real)
@@ -206,9 +226,9 @@ async def cmd_positions(message: Message) -> None:
         return
 
     balance_cache: dict[TradingMode, float | None] = {}
-    blocks = []
     for inst in instances:
-        status = "работает" if manager.is_running(inst.id) else "остановлена"
+        running = manager.is_running(inst.id)
+        status = "работает" if running else "остановлена"
 
         async with get_session() as session:
             order = await latest_order(session, inst.id)
@@ -224,13 +244,18 @@ async def cmd_positions(message: Message) -> None:
         balance = balance_cache[inst.mode]
         balance_line = f"свободный кэш на счёте: {balance:,.2f} руб." if balance is not None else "баланс счёта: н/д"
 
-        blocks.append(
+        text = (
             f"#{inst.id}: {inst.strategy_name} на {inst.ticker} ({inst.mode.value}) — {status}\n"
             f"  {position_line}\n"
             f"  Реализованный P&L за сегодня: {realized_pnl:+.2f} руб.\n"
             f"  {balance_line}"
         )
-    await message.answer("\n\n".join(blocks))
+        button = (
+            InlineKeyboardButton(text="⏹ Стоп", callback_data=f"stop_id:{inst.id}")
+            if running
+            else InlineKeyboardButton(text="▶️ Резюме", callback_data=f"resume_id:{inst.id}")
+        )
+        await message.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[button]]))
 
 
 @router.message(Command("stop"))
