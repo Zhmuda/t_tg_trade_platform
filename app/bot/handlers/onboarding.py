@@ -3,7 +3,7 @@ from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from app.bot.keyboards import main_menu_inline_keyboard, persistent_menu_keyboard
+from app.bot.keyboards import persistent_menu_keyboard
 from app.bot.states import TokenStates
 from app.db.models import TradingMode
 from app.db.repository import get_or_create_user, save_broker_credential
@@ -33,7 +33,6 @@ async def cmd_start(message: Message) -> None:
         "Кнопка «☰ Меню» снизу всегда открывает список действий — не нужно помнить команды.",
         reply_markup=persistent_menu_keyboard(),
     )
-    await message.answer("Что делаем?", reply_markup=main_menu_inline_keyboard())
 
 
 @router.callback_query(F.data.startswith("set_token:"))

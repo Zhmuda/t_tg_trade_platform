@@ -29,7 +29,7 @@ async def _start_flow(message: Message, state: FSMContext, mode: TradingMode) ->
     buttons = [[InlineKeyboardButton(text=name, callback_data=f"tr_strategy:{name}")] for name in available_strategy_names()]
     await state.update_data(mode=mode.value)
     await state.set_state(StrategyFlow.choosing_strategy)
-    await message.answer("Выберите стратегию:", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+    await message.answer("Выберите стратегию:", reply_markup=back_to_menu_keyboard(buttons))
 
 
 async def cmd_demo_core(message: Message, state: FSMContext, user_id: int) -> None:
@@ -73,7 +73,7 @@ async def choose_strategy(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(strategy_name=strategy_name)
     await state.set_state(StrategyFlow.entering_ticker)
     await callback.answer()
-    await callback.message.answer("Введите тикер акции (например, SBER):")
+    await callback.message.answer("Введите тикер акции (например, SBER):", reply_markup=back_to_menu_keyboard())
 
 
 @router.message(StrategyFlow.entering_ticker)
@@ -85,12 +85,14 @@ async def enter_ticker(message: Message, state: FSMContext) -> None:
 
     if mode == TradingMode.PRODUCTION:
         await state.set_state(StrategyFlow.confirming_real)
+        cancel_button = [[InlineKeyboardButton(text="✖️ Отмена", callback_data="cancel_real_trade")]]
         await message.answer(
             "⚠ Вы запускаете стратегию на РЕАЛЬНЫЕ ДЕНЬГИ.\n"
             f"Стратегия: {data['strategy_name']}, тикер: {ticker}.\n"
             "Риск-лимиты по умолчанию: макс. 1 лот на позицию, стоп-лосс 1%, тейк-профит 2%, "
             "дневной лимит убытка 3% от капитала.\n\n"
-            "Для подтверждения отправьте одним сообщением: ПОДТВЕРЖДАЮ"
+            "Для подтверждения отправьте одним сообщением: ПОДТВЕРЖДАЮ",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=cancel_button),
         )
         return
 
@@ -105,11 +107,23 @@ async def confirm_real_trading(message: Message, state: FSMContext) -> None:
         await state.clear()
         started = await manager.start(resume_instance_id)
         await message.answer(
-            f"Стратегия #{resume_instance_id} возобновлена." if started else "Не удалось возобновить — попробуйте ещё раз.",
-            reply_markup=back_to_menu_keyboard(),
+            f"Стратегия #{resume_instance_id} возобновлена." if started else "Не удалось возобновить — попробуйте ещё раз."
         )
         return
     await _create_and_start(message, state, TradingMode.PRODUCTION)
+
+
+@router.callback_query(StrategyFlow.confirming_real, F.data == "cancel_real_trade")
+async def cancel_real_trading_button(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await callback.answer("Отменено")
+    await callback.message.edit_text("Реальная торговля не запущена.", reply_markup=None)
+
+
+@router.message(StrategyFlow.confirming_real)
+async def reject_real_trading(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("Не подтверждено текстом ПОДТВЕРЖДАЮ — реальная торговля не запущена.")
 
 
 async def cmd_resume_core(message: Message, user_id: int) -> None:
@@ -117,15 +131,13 @@ async def cmd_resume_core(message: Message, user_id: int) -> None:
         instances = await list_strategy_instances(session, user_id)
     stopped = [inst for inst in instances if not manager.is_running(inst.id)]
     if not stopped:
-        await message.answer("Нечего возобновлять — нет остановленных стратегий.", reply_markup=back_to_menu_keyboard())
+        await message.answer("Нечего возобновлять — нет остановленных стратегий.")
         return
     buttons = [
         [InlineKeyboardButton(text=f"#{inst.id} {inst.strategy_name} на {inst.ticker}", callback_data=f"resume_id:{inst.id}")]
         for inst in stopped
     ]
-    await message.answer(
-        "Какую стратегию возобновить?", reply_markup=back_to_menu_keyboard(buttons)
-    )
+    await message.answer("Какую стратегию возобновить?", reply_markup=back_to_menu_keyboard(buttons))
 
 
 @router.message(Command("resume"))
@@ -151,9 +163,11 @@ async def _resume_instance(message: Message, state: FSMContext, instance_id: int
     if instance.mode == TradingMode.PRODUCTION:
         await state.update_data(resume_instance_id=instance_id)
         await state.set_state(StrategyFlow.confirming_real)
+        cancel_button = [[InlineKeyboardButton(text="✖️ Отмена", callback_data="cancel_real_trade")]]
         await message.answer(
             f"⚠ Вы возобновляете РЕАЛЬНУЮ торговлю: {instance.strategy_name} на {instance.ticker}.\n"
-            "Для подтверждения отправьте одним сообщением: ПОДТВЕРЖДАЮ"
+            "Для подтверждения отправьте одним сообщением: ПОДТВЕРЖДАЮ",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=cancel_button),
         )
         return
 
@@ -161,8 +175,7 @@ async def _resume_instance(message: Message, state: FSMContext, instance_id: int
     await message.answer(
         f"Стратегия #{instance_id} ({instance.strategy_name} на {instance.ticker}, {instance.mode.value}) возобновлена."
         if started
-        else "Не удалось возобновить — попробуйте ещё раз.",
-        reply_markup=back_to_menu_keyboard(),
+        else "Не удалось возобновить — попробуйте ещё раз."
     )
 
 
@@ -171,12 +184,6 @@ async def resume_via_button(callback: CallbackQuery, state: FSMContext) -> None:
     instance_id = int(callback.data.split(":", 1)[1])
     await callback.answer()
     await _resume_instance(callback.message, state, instance_id, callback.from_user.id)
-
-
-@router.message(StrategyFlow.confirming_real)
-async def reject_real_trading(message: Message, state: FSMContext) -> None:
-    await state.clear()
-    await message.answer("Не подтверждено текстом ПОДТВЕРЖДАЮ — реальная торговля не запущена.")
 
 
 async def _create_and_start(message: Message, state: FSMContext, mode: TradingMode) -> None:
@@ -213,17 +220,14 @@ async def _create_and_start(message: Message, state: FSMContext, mode: TradingMo
         started = await manager.start(instance.id)
 
     label = "demo (Sandbox)" if mode == TradingMode.SANDBOX else "РЕАЛЬНОЙ торговле"
-    buttons = [[InlineKeyboardButton(text="📈 Мои позиции", callback_data="menu:positions")]]
     if started:
+        buttons = [[InlineKeyboardButton(text="📈 Мои позиции", callback_data="menu:positions")]]
         await message.answer(
-            f"Стратегия «{strategy_name}» на {ticker} запущена в режиме {label}. ID: {instance.id}",
-            reply_markup=back_to_menu_keyboard(buttons),
+            f"✅ Стратегия «{strategy_name}» на {ticker} запущена в режиме {label}. ID: {instance.id}",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
         )
     else:
-        await message.answer(
-            "Не удалось запустить стратегию — попробуйте /positions, затем /stop и повторите.",
-            reply_markup=back_to_menu_keyboard(),
-        )
+        await message.answer("Не удалось запустить стратегию — попробуйте /positions, затем /stop и повторите.")
 
 
 async def _account_rub_balance(user_id: int, mode: TradingMode) -> float | None:
@@ -245,36 +249,32 @@ async def cmd_positions_core(message: Message, user_id: int) -> None:
     async with get_session() as session:
         instances = await list_strategy_instances(session, user_id)
     if not instances:
-        await message.answer(
-            "У вас нет стратегий. Используйте /demo или /trade, чтобы запустить.",
-            reply_markup=back_to_menu_keyboard(),
-        )
+        await message.answer("У вас нет стратегий. Используйте /demo или /trade, чтобы запустить.")
         return
 
     balance_cache: dict[TradingMode, float | None] = {}
     for inst in instances:
         running = manager.is_running(inst.id)
-        status = "работает" if running else "остановлена"
+        status = "🟢 работает" if running else "⚪ остановлена"
 
         async with get_session() as session:
             order = await latest_order(session, inst.id)
             realized_pnl = await todays_realized_pnl(session, inst.id)
 
         if order is not None and order.direction == OrderDirection.BUY:
-            position_line = f"открыта позиция: {order.lots} лот(ов) по {order.price:.2f} руб. (куплено)"
+            position_line = f"открыта позиция: {order.lots} лот(ов) по {order.price:.2f} руб."
         else:
-            position_line = "позиции нет — сейчас в деньгах, ждёт сигнала на вход"
+            position_line = "в деньгах, ждёт сигнала на вход"
 
         if inst.mode not in balance_cache:
             balance_cache[inst.mode] = await _account_rub_balance(user_id, inst.mode)
         balance = balance_cache[inst.mode]
-        balance_line = f"свободный кэш на счёте: {balance:,.2f} руб." if balance is not None else "баланс счёта: н/д"
+        balance_line = f"свободный кэш: {balance:,.2f} руб." if balance is not None else "баланс счёта: н/д"
 
         text = (
-            f"#{inst.id}: {inst.strategy_name} на {inst.ticker} ({inst.mode.value}) — {status}\n"
-            f"  {position_line}\n"
-            f"  Реализованный P&L за сегодня: {realized_pnl:+.2f} руб.\n"
-            f"  {balance_line}"
+            f"#{inst.id} · {inst.strategy_name} · {inst.ticker} ({inst.mode.value}) — {status}\n"
+            f"{position_line}\n"
+            f"P&L сегодня: {realized_pnl:+.2f} руб. · {balance_line}"
         )
         if running:
             buttons = [[InlineKeyboardButton(text="⏹ Стоп", callback_data=f"stop_id:{inst.id}")]]
@@ -286,7 +286,6 @@ async def cmd_positions_core(message: Message, user_id: int) -> None:
                 ]
             ]
         await message.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
-    await message.answer("Готово.", reply_markup=back_to_menu_keyboard())
 
 
 @router.message(Command("positions"))
@@ -299,7 +298,7 @@ async def cmd_stop_core(message: Message, user_id: int) -> None:
         instances = await list_strategy_instances(session, user_id)
     running = [inst for inst in instances if manager.is_running(inst.id)]
     if not running:
-        await message.answer("У вас нет запущенных стратегий.", reply_markup=back_to_menu_keyboard())
+        await message.answer("У вас нет запущенных стратегий.")
         return
     buttons = [
         [InlineKeyboardButton(text=f"#{inst.id} {inst.strategy_name} на {inst.ticker}", callback_data=f"stop_id:{inst.id}")]
@@ -326,10 +325,7 @@ async def _stop_instance(message: Message, instance_id: int, user_id: int) -> No
         return
 
     stopped = await manager.stop(instance_id)
-    await message.answer(
-        f"Стратегия #{instance_id} остановлена." if stopped else "Эта стратегия и так не была запущена.",
-        reply_markup=back_to_menu_keyboard(),
-    )
+    await message.answer(f"⏹ Стратегия #{instance_id} остановлена." if stopped else "Эта стратегия и так не была запущена.")
 
 
 @router.callback_query(F.data.startswith("stop_id:"))
@@ -347,7 +343,7 @@ async def cmd_stop_all(message: Message) -> None:
     for inst in instances:
         if await manager.stop(inst.id):
             count += 1
-    await message.answer(f"Остановлено ваших стратегий: {count}.", reply_markup=back_to_menu_keyboard())
+    await message.answer(f"⏹ Остановлено ваших стратегий: {count}.")
 
 
 @router.callback_query(F.data.startswith("delete_ask:"))
@@ -357,13 +353,22 @@ async def delete_ask(callback: CallbackQuery) -> None:
     buttons = [
         [
             InlineKeyboardButton(text="✅ Да, удалить", callback_data=f"delete_confirm:{instance_id}"),
-            InlineKeyboardButton(text="✖️ Отмена", callback_data="menu:positions"),
+            InlineKeyboardButton(text="✖️ Отмена", callback_data=f"delete_cancel:{instance_id}"),
         ]
     ]
     await callback.message.answer(
         f"Удалить стратегию #{instance_id} вместе с историей её ордеров/сделок? Это необратимо.",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
     )
+
+
+@router.callback_query(F.data.startswith("delete_cancel:"))
+async def delete_cancel(callback: CallbackQuery) -> None:
+    await callback.answer()
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("delete_confirm:"))
@@ -382,4 +387,8 @@ async def delete_confirm(callback: CallbackQuery) -> None:
             return
         await delete_strategy_instance(session, instance_id)
 
-    await callback.message.answer(f"Стратегия #{instance_id} удалена.", reply_markup=back_to_menu_keyboard())
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    await callback.message.answer(f"🗑 Стратегия #{instance_id} удалена.")

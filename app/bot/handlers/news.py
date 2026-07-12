@@ -13,6 +13,14 @@ router = Router(name="news")
 _PERIODS = {"1 день": 1, "7 дней": 7, "30 дней": 30}
 
 
+async def cmd_news_core(message: Message, state: FSMContext) -> None:
+    """Prompt for a ticker. Never reads message.text - safe to call with a bot-authored
+    message (e.g. from the menu router), unlike the /news command handler below which
+    parses its own text for an optional inline ticker argument."""
+    await state.set_state(NewsFlow.entering_ticker)
+    await message.answer("Введите тикер или название компании (например, SBER):", reply_markup=back_to_menu_keyboard())
+
+
 @router.message(Command("news"))
 async def cmd_news(message: Message, state: FSMContext) -> None:
     args = message.text.split()[1:]
@@ -20,8 +28,7 @@ async def cmd_news(message: Message, state: FSMContext) -> None:
         await state.update_data(ticker=args[0].upper())
         await _ask_period(message, state)
     else:
-        await state.set_state(NewsFlow.entering_ticker)
-        await message.answer("Введите тикер или название компании (например, SBER):")
+        await cmd_news_core(message, state)
 
 
 @router.message(NewsFlow.entering_ticker)

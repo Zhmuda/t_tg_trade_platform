@@ -26,7 +26,7 @@ _ROUTES = {
     "positions": lambda message, state, user_id: trading.cmd_positions_core(message, user_id),
     "resume": lambda message, state, user_id: trading.cmd_resume_core(message, user_id),
     "stop": lambda message, state, user_id: trading.cmd_stop_core(message, user_id),
-    "news": lambda message, state, user_id: news.cmd_news(message, state),
+    "news": lambda message, state, user_id: news.cmd_news_core(message, state),
     "strategies": lambda message, state, user_id: strategies.cmd_strategies(message),
 }
 

@@ -42,7 +42,7 @@ async def choose_strategy(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(strategy_name=strategy_name)
     await state.set_state(BacktestFlow.entering_ticker)
     await callback.answer()
-    await callback.message.answer("Введите тикер акции (например, SBER):")
+    await callback.message.answer("Введите тикер акции (например, SBER):", reply_markup=back_to_menu_keyboard())
 
 
 @router.message(BacktestFlow.entering_ticker)
@@ -126,4 +126,6 @@ async def backtest_again(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(strategy_name=strategy_name)
     await state.set_state(BacktestFlow.entering_ticker)
     await callback.answer()
-    await callback.message.answer(f"Стратегия «{strategy_name}». Введите тикер акции (например, SBER):")
+    await callback.message.answer(
+        f"Стратегия «{strategy_name}». Введите тикер акции (например, SBER):", reply_markup=back_to_menu_keyboard()
+    )
