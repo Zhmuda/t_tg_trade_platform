@@ -97,6 +97,17 @@ async def set_strategy_status(session: AsyncSession, instance_id: int, status: S
         await session.commit()
 
 
+async def delete_strategy_instance(session: AsyncSession, instance_id: int) -> bool:
+    """Delete a stopped strategy instance and its order/trade history (cascade). Caller
+    must ensure it isn't currently running - deleting a live one would orphan its task."""
+    instance = await session.get(StrategyInstance, instance_id)
+    if instance is None:
+        return False
+    await session.delete(instance)
+    await session.commit()
+    return True
+
+
 async def reset_stale_running_instances(session: AsyncSession) -> int:
     """Mark every RUNNING instance as STOPPED. Call once at process startup: a RUNNING
     row left over from a previous process means there's no asyncio task actually driving

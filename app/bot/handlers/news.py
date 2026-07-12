@@ -1,8 +1,9 @@
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
 
+from app.bot.keyboards import back_to_menu_keyboard
 from app.bot.states import NewsFlow
 from app.config import get_settings
 from app.news.worker import compute_ticker_sentiment
@@ -32,7 +33,7 @@ async def enter_ticker(message: Message, state: FSMContext) -> None:
 async def _ask_period(message: Message, state: FSMContext) -> None:
     await state.set_state(NewsFlow.choosing_period)
     buttons = [[InlineKeyboardButton(text=label, callback_data=f"news_period:{days}")] for label, days in _PERIODS.items()]
-    await message.answer("За какой период проанализировать новости?", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+    await message.answer("За какой период проанализировать новости?", reply_markup=back_to_menu_keyboard(buttons))
 
 
 @router.callback_query(NewsFlow.choosing_period, F.data.startswith("news_period:"))
@@ -44,6 +45,8 @@ async def choose_period(callback: CallbackQuery, state: FSMContext) -> None:
     ticker = data["ticker"]
     await callback.message.answer(f"Анализирую новости по {ticker} за {days} дн., подождите...")
 
+    retry_buttons = [[InlineKeyboardButton(text="🔁 Другой тикер", callback_data="menu:news")]]
+
     result = await compute_ticker_sentiment(ticker, days=days)
     if result is None:
         settings = get_settings()
@@ -53,7 +56,9 @@ async def choose_period(callback: CallbackQuery, state: FSMContext) -> None:
             reason = "не задан GEMINI_API_KEY в .env"
         else:
             reason = "новостей за этот период не нашлось, либо не удалось получить оценку от Gemini — подробности в логах контейнера"
-        await callback.message.answer(f"Не удалось посчитать сентимент по {ticker}: {reason}.")
+        await callback.message.answer(
+            f"Не удалось посчитать сентимент по {ticker}: {reason}.", reply_markup=back_to_menu_keyboard(retry_buttons)
+        )
         return
 
     avg_score, sample_size = result
@@ -64,5 +69,6 @@ async def choose_period(callback: CallbackQuery, state: FSMContext) -> None:
     else:
         verdict = f"⚖ НЕЙТРАЛЬНЫЙ ({avg_score:.2f})"
     await callback.message.answer(
-        f"Сентимент по {ticker} за {days} дн. (проанализировано {sample_size} новостей):\n{verdict}"
+        f"Сентимент по {ticker} за {days} дн. (проанализировано {sample_size} новостей):\n{verdict}",
+        reply_markup=back_to_menu_keyboard(retry_buttons),
     )

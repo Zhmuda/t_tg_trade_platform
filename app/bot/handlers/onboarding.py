@@ -3,7 +3,7 @@ from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from app.bot.keyboards import main_menu_keyboard
+from app.bot.keyboards import main_menu_inline_keyboard, persistent_menu_keyboard
 from app.bot.states import TokenStates
 from app.db.models import TradingMode
 from app.db.repository import get_or_create_user, save_broker_credential
@@ -26,19 +26,14 @@ async def cmd_start(message: Message) -> None:
     await message.answer(
         "Привет! Это торговый бот для Т-Инвестиций.\n\n"
         "Сначала подключите токен. Рекомендую начать с demo (Sandbox) — виртуальные деньги "
-        "на реальных котировках, чтобы спокойно проверить стратегию перед реальными деньгами.\n\n"
-        "Команды:\n"
-        "/strategies — список стратегий\n"
-        "/backtest — бэктест на истории\n"
-        "/demo — запустить стратегию в песочнице (Sandbox)\n"
-        "/trade — запустить стратегию на реальные деньги\n"
-        "/positions — мои стратегии\n"
-        "/stop <id> — остановить стратегию\n"
-        "/stop_all — остановить все мои стратегии\n"
-        "/news <тикер> — новостной сентимент",
+        "на реальных котировках, чтобы спокойно проверить стратегию перед реальными деньгами.",
         reply_markup=keyboard,
     )
-    await message.answer("Меню команд снизу — можно нажимать вместо ввода текста.", reply_markup=main_menu_keyboard())
+    await message.answer(
+        "Кнопка «☰ Меню» снизу всегда открывает список действий — не нужно помнить команды.",
+        reply_markup=persistent_menu_keyboard(),
+    )
+    await message.answer("Что делаем?", reply_markup=main_menu_inline_keyboard())
 
 
 @router.callback_query(F.data.startswith("set_token:"))

@@ -3,12 +3,13 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
 
-from app.bot.handlers import backtest, news, onboarding, strategies, trading
+from app.bot.handlers import backtest, menu, news, onboarding, strategies, trading
 from app.bot.middlewares import ErrorHandlingMiddleware
 from app.config import get_settings
 
 BOT_COMMANDS = [
     BotCommand(command="start", description="Подключить/обновить токены"),
+    BotCommand(command="menu", description="Открыть меню кнопок"),
     BotCommand(command="strategies", description="Список доступных стратегий"),
     BotCommand(command="backtest", description="Бэктест стратегии на истории"),
     BotCommand(command="demo", description="Запустить демо-торговлю (Sandbox)"),
@@ -30,6 +31,10 @@ def build_bot_and_dispatcher() -> tuple[Bot, Dispatcher]:
     dp.message.middleware(ErrorHandlingMiddleware())
     dp.callback_query.middleware(ErrorHandlingMiddleware())
 
+    # menu router first: its "☰ Меню" text handler has no FSM-state filter and must win
+    # over per-state handlers (e.g. BacktestFlow.entering_ticker) that would otherwise
+    # swallow the tap as if it were free-text input to whatever flow is in progress.
+    dp.include_router(menu.router)
     dp.include_router(onboarding.router)
     dp.include_router(strategies.router)
     dp.include_router(backtest.router)
