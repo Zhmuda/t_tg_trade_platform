@@ -195,6 +195,49 @@ async def todays_realized_pnl(session: AsyncSession, strategy_instance_id: int) 
     return sum(t.pnl or 0.0 for t in trades if t.closed_at and t.closed_at.date() == today)
 
 
+async def total_realized_pnl(session: AsyncSession, strategy_instance_id: int) -> float:
+    """Sum of pnl across every closed trade for this instance, since it was first
+    launched - not just today. Used as the "realized" half of the cumulative-return
+    alert check in the live engine."""
+    stmt = select(Trade).where(Trade.strategy_instance_id == strategy_instance_id)
+    trades = (await session.execute(stmt)).scalars().all()
+    return sum(t.pnl or 0.0 for t in trades)
+
+
+async def ensure_alert_capital_base(session: AsyncSession, strategy_instance_id: int, capital_base: float) -> None:
+    """Set alert_capital_base once, on the instance's first fill - a no-op afterwards,
+    since the % baseline should stay fixed for the life of the instance."""
+    instance = await session.get(StrategyInstance, strategy_instance_id)
+    if instance is not None and instance.alert_capital_base is None and capital_base > 0:
+        instance.alert_capital_base = capital_base
+        await session.commit()
+
+
+async def update_alert_steps_sent(
+    session: AsyncSession, strategy_instance_id: int, *, profit_alerts_sent: int | None = None, loss_alerts_sent: int | None = None
+) -> None:
+    instance = await session.get(StrategyInstance, strategy_instance_id)
+    if instance is None:
+        return
+    if profit_alerts_sent is not None:
+        instance.profit_alerts_sent = profit_alerts_sent
+    if loss_alerts_sent is not None:
+        instance.loss_alerts_sent = loss_alerts_sent
+    await session.commit()
+
+
+async def set_alert_thresholds(
+    session: AsyncSession, strategy_instance_id: int, *, profit_alert_pct: float, loss_alert_pct: float
+) -> bool:
+    instance = await session.get(StrategyInstance, strategy_instance_id)
+    if instance is None:
+        return False
+    instance.profit_alert_pct = profit_alert_pct
+    instance.loss_alert_pct = loss_alert_pct
+    await session.commit()
+    return True
+
+
 async def save_backtest_run(
     session: AsyncSession,
     *,

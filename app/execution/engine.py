@@ -3,6 +3,7 @@ from datetime import timedelta
 from uuid import uuid4
 
 import pandas as pd
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from t_tech.invest import (
     CandleInstrument,
     CandleInterval,
@@ -18,6 +19,7 @@ from app.broker.instruments import resolve_ticker
 from app.db.crypto import decrypt_token
 from app.db.models import OrderDirection as DbOrderDirection, StrategyInstance, TradingMode
 from app.db.repository import (
+    ensure_alert_capital_base,
     get_broker_credential,
     latest_order,
     latest_sentiment,
@@ -25,8 +27,11 @@ from app.db.repository import (
     record_trade,
     save_broker_credential,
     todays_realized_pnl,
+    total_realized_pnl,
+    update_alert_steps_sent,
 )
 from app.db.session import get_session
+from app.notifications import notify_user
 from app.risk.guards import RiskLimits, apply_risk_guards, size_position
 from app.strategies.base import Action, Position
 from app.strategies.registry import create_strategy
@@ -48,6 +53,63 @@ def _candle_row(candle) -> dict:
         "close": float(quotation_to_decimal(candle.close)),
         "volume": candle.volume,
     }
+
+
+async def _check_pnl_alerts(
+    instance: StrategyInstance,
+    instance_id: int,
+    position: Position,
+    current_price: float,
+    lot_size: int,
+    alert_capital_base: float | None,
+    profit_alerts_sent: int,
+    loss_alerts_sent: int,
+) -> tuple[float | None, int, int]:
+    """Cumulative return since launch, as % of the capital this instance first put to
+    work. Fires a Telegram message once per step of profit_alert_pct/loss_alert_pct
+    crossed (never re-fires for a step already notified, so oscillating near a
+    threshold doesn't spam the user)."""
+    if alert_capital_base is None or alert_capital_base <= 0:
+        return alert_capital_base, profit_alerts_sent, loss_alerts_sent
+
+    async with get_session() as session:
+        realized = await total_realized_pnl(session, instance_id)
+    unrealized = (current_price - position.entry_price) * position.lots * lot_size if position.is_open else 0.0
+    pct = (realized + unrealized) / alert_capital_base * 100
+
+    if instance.profit_alert_pct > 0 and pct > 0:
+        target = int(pct // instance.profit_alert_pct)
+        if target > profit_alerts_sent:
+            profit_alerts_sent = target
+            async with get_session() as session:
+                await update_alert_steps_sent(session, instance_id, profit_alerts_sent=profit_alerts_sent)
+            buttons = InlineKeyboardMarkup(
+                inline_keyboard=[[InlineKeyboardButton(text="📈 Мои позиции", callback_data="menu:positions")]]
+            )
+            await notify_user(
+                instance.user_id,
+                f"🎉 Стратегия #{instance_id} ({instance.strategy_name} на {instance.ticker}): "
+                f"+{pct:.1f}% с момента запуска. Поздравляю!",
+                reply_markup=buttons,
+            )
+
+    if instance.loss_alert_pct > 0 and pct < 0:
+        target = int((-pct) // instance.loss_alert_pct)
+        if target > loss_alerts_sent:
+            loss_alerts_sent = target
+            async with get_session() as session:
+                await update_alert_steps_sent(session, instance_id, loss_alerts_sent=loss_alerts_sent)
+            buttons = InlineKeyboardMarkup(
+                inline_keyboard=[[InlineKeyboardButton(text="⏹ Остановить", callback_data=f"stop_id:{instance_id}")]]
+            )
+            await notify_user(
+                instance.user_id,
+                f"⚠️ Стратегия #{instance_id} ({instance.strategy_name} на {instance.ticker}): "
+                f"{pct:.1f}% с момента запуска. Может, пора остановить?",
+                reply_markup=buttons,
+            )
+
+    return alert_capital_base, profit_alerts_sent, loss_alerts_sent
 
 
 async def _place_market_order(client, account_id: str, figi: str, lots: int, direction):
@@ -121,6 +183,9 @@ async def run_strategy_instance(instance_id: int) -> None:
         realized_pnl_today = 0.0
         day_start_equity: float | None = None
         current_day = None
+        alert_capital_base = instance.alert_capital_base
+        profit_alerts_sent = instance.profit_alerts_sent
+        loss_alerts_sent = instance.loss_alerts_sent
 
         stream = client.create_market_data_stream()
         stream.candles.waiting_close().subscribe(
@@ -191,6 +256,9 @@ async def run_strategy_instance(instance_id: int) -> None:
                         price=fill_price,
                         broker_order_id=response.order_id,
                     )
+                    if alert_capital_base is None:
+                        alert_capital_base = fill_price * lot_size * lots
+                        await ensure_alert_capital_base(session, instance_id, alert_capital_base)
                 logger.info("BUY %s lots=%s price=%.2f reason=%s", instance.ticker, lots, fill_price, raw_signal.reason)
 
             elif final_signal.action == Action.SELL and position.is_open:
@@ -234,3 +302,8 @@ async def run_strategy_instance(instance_id: int) -> None:
                     final_signal.reason,
                 )
                 position = Position()
+
+            alert_capital_base, profit_alerts_sent, loss_alerts_sent = await _check_pnl_alerts(
+                instance, instance_id, position, row["close"], lot_size,
+                alert_capital_base, profit_alerts_sent, loss_alerts_sent,
+            )

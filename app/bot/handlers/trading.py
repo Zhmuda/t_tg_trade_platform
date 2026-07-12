@@ -16,6 +16,7 @@ from app.db.repository import (
     get_broker_credential,
     latest_order,
     list_strategy_instances,
+    set_alert_thresholds,
     todays_realized_pnl,
 )
 from app.db.session import get_session
@@ -223,7 +224,9 @@ async def _create_and_start(message: Message, state: FSMContext, mode: TradingMo
     if started:
         buttons = [[InlineKeyboardButton(text="📈 Мои позиции", callback_data="menu:positions")]]
         await message.answer(
-            f"✅ Стратегия «{strategy_name}» на {ticker} запущена в режиме {label}. ID: {instance.id}",
+            f"✅ Стратегия «{strategy_name}» на {ticker} запущена в режиме {label}. ID: {instance.id}\n\n"
+            f"Буду писать при +{instance.profit_alert_pct:.0f}% / {-instance.loss_alert_pct:.0f}% с момента запуска — "
+            f"поменять пороги: /alerts {instance.id} <прибыль%> <убыток%>",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
         )
     else:
@@ -344,6 +347,40 @@ async def cmd_stop_all(message: Message) -> None:
         if await manager.stop(inst.id):
             count += 1
     await message.answer(f"⏹ Остановлено ваших стратегий: {count}.")
+
+
+@router.message(Command("alerts"))
+async def cmd_alerts(message: Message) -> None:
+    args = message.text.split()[1:]
+    if len(args) != 3 or not args[0].isdigit():
+        await message.answer(
+            "Формат: /alerts <id> <прибыль%> <убыток%>\n"
+            "Например: /alerts 3 10 15 — сообщать о каждых +10% и -15% с момента запуска стратегии.\n"
+            "ID стратегии смотрите в /positions."
+        )
+        return
+    instance_id = int(args[0])
+    try:
+        profit_pct = float(args[1])
+        loss_pct = float(args[2])
+    except ValueError:
+        await message.answer("Проценты должны быть числами, например: /alerts 3 10 15")
+        return
+    if profit_pct <= 0 or loss_pct <= 0:
+        await message.answer("Оба порога должны быть положительными числами (это шаг, знак минуса не нужен).")
+        return
+
+    async with get_session() as session:
+        instance = await session.get(StrategyInstance, instance_id)
+        if instance is None or instance.user_id != message.from_user.id:
+            await message.answer("Стратегия с таким ID не найдена среди ваших.")
+            return
+        await set_alert_thresholds(session, instance_id, profit_alert_pct=profit_pct, loss_alert_pct=loss_pct)
+
+    await message.answer(
+        f"Готово: для стратегии #{instance_id} буду сообщать о каждых +{profit_pct:.0f}% и -{loss_pct:.0f}% "
+        "с момента запуска."
+    )
 
 
 @router.callback_query(F.data.startswith("delete_ask:"))

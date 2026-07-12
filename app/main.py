@@ -6,6 +6,7 @@ from app.bot.dispatcher import BOT_COMMANDS, build_bot_and_dispatcher
 from app.db.repository import reset_stale_running_instances
 from app.db.session import get_session, init_db
 from app.news.worker import run_sentiment_worker
+from app.notifications import set_bot
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ async def main() -> None:
 
     bot, dp = build_bot_and_dispatcher()
     await bot.set_my_commands(BOT_COMMANDS)
+    set_bot(bot)
 
     await asyncio.gather(
         run_sentiment_worker(),

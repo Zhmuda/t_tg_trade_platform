@@ -18,6 +18,7 @@ BOT_COMMANDS = [
     BotCommand(command="resume", description="Возобновить остановленную стратегию по ID"),
     BotCommand(command="stop", description="Остановить стратегию по ID"),
     BotCommand(command="stop_all", description="Остановить все мои стратегии"),
+    BotCommand(command="alerts", description="Пороги уведомлений о P&L по стратегии"),
     BotCommand(command="news", description="Новостной сентимент по тикеру"),
 ]
 

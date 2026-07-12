@@ -73,6 +73,17 @@ class StrategyInstance(Base):
     take_profit_pct: Mapped[float] = mapped_column(Float, default=2.0)
     max_daily_loss_pct: Mapped[float] = mapped_column(Float, default=3.0)
 
+    # Telegram alerts on cumulative P&L since launch, as a % of the capital this
+    # instance first put to work (alert_capital_base, set on its first fill). Milestones
+    # only fire once per step crossed (profit_alerts_sent/loss_alerts_sent count how many
+    # steps have already been notified) so a strategy oscillating near a threshold
+    # doesn't spam the user.
+    profit_alert_pct: Mapped[float] = mapped_column(Float, default=10.0)
+    loss_alert_pct: Mapped[float] = mapped_column(Float, default=15.0)
+    alert_capital_base: Mapped[float | None] = mapped_column(Float, nullable=True)
+    profit_alerts_sent: Mapped[int] = mapped_column(default=0)
+    loss_alerts_sent: Mapped[int] = mapped_column(default=0)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
