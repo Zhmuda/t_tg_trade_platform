@@ -22,6 +22,13 @@ class Settings(BaseSettings):
     # 1800s (30 min) keeps daily Gemini calls (one per tracked ticker per cycle) well
     # under the free-tier RPD even with several tickers tracked at once - see README.
     sentiment_refresh_interval_seconds: int = 1800
+    # Comma-separated public Telegram channel usernames (no @) scraped for posts to feed
+    # into sentiment, e.g. "markettwits,anothersource". Empty disables this source.
+    news_telegram_channels: str = "markettwits"
+
+    @property
+    def news_telegram_channel_list(self) -> list[str]:
+        return [c.strip() for c in self.news_telegram_channels.split(",") if c.strip()]
 
     # Optional single-user convenience: pre-provision T-Invest tokens from .env instead of
     # typing them into the bot via /start. See app/bootstrap.py.
