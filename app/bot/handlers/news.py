@@ -6,6 +6,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
 from app.bot.keyboards import back_to_menu_keyboard
 from app.bot.states import NewsFlow
 from app.config import get_settings
+from app.news.telegram_channel import fetch_channel_posts
 from app.news.worker import compute_ticker_sentiment
 
 router = Router(name="news")
@@ -54,9 +55,12 @@ async def choose_period(callback: CallbackQuery, state: FSMContext) -> None:
 
     retry_buttons = [[InlineKeyboardButton(text="🔁 Другой тикер", callback_data="menu:news")]]
 
-    result = await compute_ticker_sentiment(ticker, days=days)
+    settings = get_settings()
+    channels = settings.news_telegram_channel_list
+    channel_posts = await fetch_channel_posts(channels, lookback_minutes=days * 24 * 60) if channels else []
+
+    result = await compute_ticker_sentiment(ticker, days=days, channel_posts=channel_posts)
     if result is None:
-        settings = get_settings()
         if not settings.newsapi_key:
             reason = "не задан NEWSAPI_KEY в .env"
         elif not settings.gemini_api_key:
