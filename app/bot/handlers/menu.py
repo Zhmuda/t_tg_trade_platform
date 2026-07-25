@@ -3,7 +3,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from app.bot.handlers import backtest, news, strategies, trading
+from app.bot.handlers import backtest, history, news, strategies, trading
 from app.bot.keyboards import OPEN_MENU, main_menu_inline_keyboard
 
 router = Router(name="menu")
@@ -24,6 +24,8 @@ _ROUTES = {
     "demo": lambda message, state, user_id: trading.cmd_demo_core(message, state, user_id),
     "trade": lambda message, state, user_id: trading.cmd_trade_core(message, state, user_id),
     "positions": lambda message, state, user_id: trading.cmd_positions_core(message, user_id),
+    "history": lambda message, state, user_id: history.cmd_history_core(message, user_id),
+    "pnl": lambda message, state, user_id: history.cmd_pnl_core(message, user_id),
     "resume": lambda message, state, user_id: trading.cmd_resume_core(message, user_id),
     "stop": lambda message, state, user_id: trading.cmd_stop_core(message, user_id),
     "news": lambda message, state, user_id: news.cmd_news_core(message, state),

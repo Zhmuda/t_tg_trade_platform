@@ -20,6 +20,11 @@ async def cmd_strategies(message: Message) -> None:
     lines = ["Доступные стратегии:"]
     for name in available_strategy_names():
         lines.append(f"• {name} — {_DESCRIPTIONS.get(name, '')}")
-    lines.append("\nИспользуются в /backtest, /demo и /trade. Ни одна стратегия не гарантирует прибыль — сначала проверьте её на /backtest и в /demo.")
+    lines.append(
+        "\nИспользуются в /backtest, /demo и /trade. В /demo и /trade можно включить фильтр по "
+        "новостному сентименту (NewsAPI + Telegram-каналы) — тогда стратегия не будет покупать, пока "
+        "по тикеру заметно негативный новостной фон. Ни одна стратегия не гарантирует прибыль — "
+        "сначала проверьте её на /backtest и в /demo."
+    )
     buttons = [[InlineKeyboardButton(text="📊 Бэктест", callback_data="menu:backtest")]]
     await message.answer("\n".join(lines), reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))

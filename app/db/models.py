@@ -116,6 +116,7 @@ class Trade(Base):
     direction: Mapped[OrderDirection] = mapped_column(Enum(OrderDirection))
     lots: Mapped[int] = mapped_column()
     price: Mapped[float] = mapped_column(Float)
+    entry_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     pnl: Mapped[float | None] = mapped_column(Float, nullable=True)
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

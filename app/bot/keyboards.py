@@ -19,6 +19,8 @@ def main_menu_inline_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="🟢 Демо-торговля", callback_data="menu:demo")],
         [InlineKeyboardButton(text="💰 Реальная торговля", callback_data="menu:trade")],
         [InlineKeyboardButton(text="📈 Мои позиции", callback_data="menu:positions")],
+        [InlineKeyboardButton(text="📜 История сделок", callback_data="menu:history")],
+        [InlineKeyboardButton(text="💰 Сводный P&L", callback_data="menu:pnl")],
         [
             InlineKeyboardButton(text="▶️ Возобновить", callback_data="menu:resume"),
             InlineKeyboardButton(text="⏹ Остановить", callback_data="menu:stop"),

@@ -34,7 +34,7 @@ async def cmd_news(message: Message, state: FSMContext) -> None:
 
 @router.message(NewsFlow.entering_ticker)
 async def enter_ticker(message: Message, state: FSMContext) -> None:
-    await state.update_data(ticker=message.text.strip())
+    await state.update_data(ticker=message.text.strip().upper())
     await _ask_period(message, state)
 
 

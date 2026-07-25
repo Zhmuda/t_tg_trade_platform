@@ -5,6 +5,7 @@ from app.bootstrap import provision_owner_tokens_from_env
 from app.bot.dispatcher import BOT_COMMANDS, build_bot_and_dispatcher
 from app.db.repository import reset_stale_running_instances
 from app.db.session import get_session, init_db
+from app.digest_worker import run_daily_digest_worker
 from app.news.worker import run_sentiment_worker
 from app.notifications import set_bot
 
@@ -27,6 +28,7 @@ async def main() -> None:
 
     await asyncio.gather(
         run_sentiment_worker(),
+        run_daily_digest_worker(),
         dp.start_polling(bot),
     )
 

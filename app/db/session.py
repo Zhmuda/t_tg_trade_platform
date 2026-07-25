@@ -21,18 +21,23 @@ _STRATEGY_INSTANCE_COLUMN_MIGRATIONS = {
     "loss_alerts_sent": "INTEGER NOT NULL DEFAULT 0",
 }
 
+_TRADE_COLUMN_MIGRATIONS = {
+    "entry_price": "REAL",
+}
 
-def _add_missing_strategy_instance_columns(conn) -> None:
-    existing = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(strategy_instances)").fetchall()}
-    for column, ddl in _STRATEGY_INSTANCE_COLUMN_MIGRATIONS.items():
+
+def _add_missing_columns(conn, table: str, migrations: dict[str, str]) -> None:
+    existing = {row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})").fetchall()}
+    for column, ddl in migrations.items():
         if column not in existing:
-            conn.exec_driver_sql(f"ALTER TABLE strategy_instances ADD COLUMN {column} {ddl}")
+            conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
 
 async def init_db() -> None:
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        await conn.run_sync(_add_missing_strategy_instance_columns)
+        await conn.run_sync(_add_missing_columns, "strategy_instances", _STRATEGY_INSTANCE_COLUMN_MIGRATIONS)
+        await conn.run_sync(_add_missing_columns, "trades", _TRADE_COLUMN_MIGRATIONS)
 
 
 @asynccontextmanager

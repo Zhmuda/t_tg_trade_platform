@@ -3,7 +3,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
 
-from app.bot.handlers import backtest, menu, news, onboarding, strategies, trading
+from app.bot.handlers import backtest, history, menu, news, onboarding, strategies, trading
 from app.bot.middlewares import ErrorHandlingMiddleware
 from app.config import get_settings
 
@@ -15,6 +15,8 @@ BOT_COMMANDS = [
     BotCommand(command="demo", description="Запустить демо-торговлю (Sandbox)"),
     BotCommand(command="trade", description="Запустить реальную торговлю"),
     BotCommand(command="positions", description="Мои запущенные стратегии"),
+    BotCommand(command="history", description="История сделок по стратегии"),
+    BotCommand(command="pnl", description="Сводный P&L по всем стратегиям"),
     BotCommand(command="resume", description="Возобновить остановленную стратегию по ID"),
     BotCommand(command="stop", description="Остановить стратегию по ID"),
     BotCommand(command="stop_all", description="Остановить все мои стратегии"),
@@ -40,6 +42,7 @@ def build_bot_and_dispatcher() -> tuple[Bot, Dispatcher]:
     dp.include_router(strategies.router)
     dp.include_router(backtest.router)
     dp.include_router(trading.router)
+    dp.include_router(history.router)
     dp.include_router(news.router)
 
     return bot, dp

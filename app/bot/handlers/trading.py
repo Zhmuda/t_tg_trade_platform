@@ -72,6 +72,23 @@ async def cmd_trade(message: Message, state: FSMContext) -> None:
 async def choose_strategy(callback: CallbackQuery, state: FSMContext) -> None:
     strategy_name = callback.data.split(":", 1)[1]
     await state.update_data(strategy_name=strategy_name)
+    await state.set_state(StrategyFlow.choosing_sentiment)
+    await callback.answer()
+    buttons = [
+        [InlineKeyboardButton(text="📰 Да, учитывать сентимент", callback_data="tr_sentiment:1")],
+        [InlineKeyboardButton(text="Нет, только технический анализ", callback_data="tr_sentiment:0")],
+    ]
+    await callback.message.answer(
+        "Учитывать новостной сентимент (NewsAPI + Telegram-каналы) при входе в позицию?\n"
+        "Если включить — стратегия не будет покупать, пока текущий сентимент по тикеру заметно негативный.",
+        reply_markup=back_to_menu_keyboard(buttons),
+    )
+
+
+@router.callback_query(StrategyFlow.choosing_sentiment, F.data.startswith("tr_sentiment:"))
+async def choose_sentiment(callback: CallbackQuery, state: FSMContext) -> None:
+    use_sentiment = callback.data.split(":", 1)[1] == "1"
+    await state.update_data(use_sentiment=use_sentiment)
     await state.set_state(StrategyFlow.entering_ticker)
     await callback.answer()
     await callback.message.answer("Введите тикер акции (например, SBER):", reply_markup=back_to_menu_keyboard())
@@ -87,9 +104,10 @@ async def enter_ticker(message: Message, state: FSMContext) -> None:
     if mode == TradingMode.PRODUCTION:
         await state.set_state(StrategyFlow.confirming_real)
         cancel_button = [[InlineKeyboardButton(text="✖️ Отмена", callback_data="cancel_real_trade")]]
+        sentiment_line = "с фильтром по новостному сентименту" if data.get("use_sentiment") else "только технический анализ"
         await message.answer(
             "⚠ Вы запускаете стратегию на РЕАЛЬНЫЕ ДЕНЬГИ.\n"
-            f"Стратегия: {data['strategy_name']}, тикер: {ticker}.\n"
+            f"Стратегия: {data['strategy_name']} ({sentiment_line}), тикер: {ticker}.\n"
             "Риск-лимиты по умолчанию: макс. 1 лот на позицию, стоп-лосс 1%, тейк-профит 2%, "
             "дневной лимит убытка 3% от капитала.\n\n"
             "Для подтверждения отправьте одним сообщением: ПОДТВЕРЖДАЮ",
@@ -193,6 +211,7 @@ async def _create_and_start(message: Message, state: FSMContext, mode: TradingMo
     user_id = message.from_user.id
     ticker = data["ticker"]
     strategy_name = data["strategy_name"]
+    use_sentiment = data.get("use_sentiment", False)
 
     async with get_session() as session:
         credential = await get_broker_credential(session, user_id, mode)
@@ -213,7 +232,7 @@ async def _create_and_start(message: Message, state: FSMContext, mode: TradingMo
             session,
             user_id=user_id,
             strategy_name=strategy_name,
-            params={},
+            params={"use_sentiment_filter": use_sentiment},
             ticker=ticker,
             figi=instrument.figi,
             mode=mode,
@@ -221,10 +240,11 @@ async def _create_and_start(message: Message, state: FSMContext, mode: TradingMo
         started = await manager.start(instance.id)
 
     label = "demo (Sandbox)" if mode == TradingMode.SANDBOX else "РЕАЛЬНОЙ торговле"
+    sentiment_label = "с фильтром по новостному сентименту" if use_sentiment else "только технический анализ"
     if started:
         buttons = [[InlineKeyboardButton(text="📈 Мои позиции", callback_data="menu:positions")]]
         await message.answer(
-            f"✅ Стратегия «{strategy_name}» на {ticker} запущена в режиме {label}. ID: {instance.id}\n\n"
+            f"✅ Стратегия «{strategy_name}» ({sentiment_label}) на {ticker} запущена в режиме {label}. ID: {instance.id}\n\n"
             f"Буду писать при +{instance.profit_alert_pct:.0f}% / {-instance.loss_alert_pct:.0f}% с момента запуска — "
             f"поменять пороги: /alerts {instance.id} <прибыль%> <убыток%>",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
@@ -274,8 +294,9 @@ async def cmd_positions_core(message: Message, user_id: int) -> None:
         balance = balance_cache[inst.mode]
         balance_line = f"свободный кэш: {balance:,.2f} руб." if balance is not None else "баланс счёта: н/д"
 
+        sentiment_tag = " 📰" if inst.params.get("use_sentiment_filter") else ""
         text = (
-            f"#{inst.id} · {inst.strategy_name} · {inst.ticker} ({inst.mode.value}) — {status}\n"
+            f"#{inst.id} · {inst.strategy_name}{sentiment_tag} · {inst.ticker} ({inst.mode.value}) — {status}\n"
             f"{position_line}\n"
             f"P&L сегодня: {realized_pnl:+.2f} руб. · {balance_line}"
         )

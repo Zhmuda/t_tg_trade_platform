@@ -13,6 +13,7 @@ class BacktestFlow(StatesGroup):
 
 class StrategyFlow(StatesGroup):
     choosing_strategy = State()
+    choosing_sentiment = State()
     entering_ticker = State()
     confirming_real = State()
 

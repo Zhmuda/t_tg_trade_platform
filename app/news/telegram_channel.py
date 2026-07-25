@@ -107,7 +107,7 @@ async def fetch_channel_posts(channels: list[str], lookback_minutes: int) -> lis
 def match_posts_for_ticker(posts: list[ChannelPost], ticker: str) -> list[str]:
     """Posts mentioning the company by name/alias, plus any broad macro/geopolitical
     post - both are treated as relevant to this ticker's near-term price."""
-    aliases = [alias.lower() for alias in _TICKER_ALIASES.get(ticker, [])]
+    aliases = [alias.lower() for alias in _TICKER_ALIASES.get(ticker.upper(), [])]
     aliases.append(ticker.lower())
 
     matched = []

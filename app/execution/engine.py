@@ -290,6 +290,7 @@ async def run_strategy_instance(instance_id: int) -> None:
                         direction=DbOrderDirection.SELL,
                         lots=position.lots,
                         price=fill_price,
+                        entry_price=position.entry_price,
                         pnl=pnl,
                         opened_at=position.entry_time,
                     )

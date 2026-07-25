@@ -26,7 +26,7 @@ from app.strategies.registry import available_strategy_names, create_strategy
 
 router = Router(name="backtest")
 
-_PERIODS = {"7 дней": 7, "30 дней": 30, "90 дней": 90}
+_PERIODS = {"7 дней": 7, "14 дней": 14, "30 дней": 30}
 
 
 @router.message(Command("backtest"))

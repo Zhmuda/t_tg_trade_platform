@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     def news_telegram_channel_list(self) -> list[str]:
         return [c.strip() for c in self.news_telegram_channels.split(",") if c.strip()]
 
+    # UTC hour the daily P&L digest is sent (18 = 21:00 MSK). Set to -1 to disable.
+    daily_digest_hour_utc: int = 18
+
     # Optional single-user convenience: pre-provision T-Invest tokens from .env instead of
     # typing them into the bot via /start. See app/bootstrap.py.
     owner_telegram_id: int | None = None

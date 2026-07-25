@@ -18,17 +18,23 @@ def available_strategy_names() -> list[str]:
     return list(BASE_STRATEGIES)
 
 
-def create_strategy(name: str, params: dict | None = None, use_sentiment_filter: bool = False) -> Strategy:
+def create_strategy(name: str, params: dict | None = None, use_sentiment_filter: bool | None = None) -> Strategy:
     """Build a strategy instance by its registered name.
 
-    params are forwarded to the strategy's constructor. Set use_sentiment_filter=True to
-    wrap it with SentimentFilteredStrategy (min_sentiment can be passed inside params).
+    Remaining params are forwarded to the strategy's constructor. use_sentiment_filter and
+    min_sentiment can be passed either as explicit kwargs here or embedded in params (the
+    latter is how StrategyInstance.params round-trips the choice made in the bot's
+    /demo, /trade and /backtest flows - see app/bot/handlers/trading.py and backtest.py)
+    - wraps the strategy with SentimentFilteredStrategy when enabled.
     """
     params = dict(params or {})
     if name not in BASE_STRATEGIES:
         raise ValueError(f"Неизвестная стратегия: {name}. Доступные: {', '.join(available_strategy_names())}")
 
     min_sentiment = params.pop("min_sentiment", -0.05)
+    params_use_sentiment = params.pop("use_sentiment_filter", False)
+    if use_sentiment_filter is None:
+        use_sentiment_filter = params_use_sentiment
     strategy = BASE_STRATEGIES[name](**params)
 
     if use_sentiment_filter:

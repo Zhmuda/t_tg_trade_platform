@@ -27,6 +27,10 @@ async def get_or_create_user(session: AsyncSession, user_id: int) -> User:
     return user
 
 
+async def all_user_ids(session: AsyncSession) -> list[int]:
+    return list((await session.execute(select(User.id))).scalars().all())
+
+
 async def save_broker_credential(
     session: AsyncSession, user_id: int, mode: TradingMode, token: str, account_id: str | None = None
 ) -> BrokerCredential:
@@ -152,6 +156,7 @@ async def record_trade(
     direction: OrderDirection,
     lots: int,
     price: float,
+    entry_price: float | None = None,
     pnl: float | None = None,
     opened_at: datetime | None = None,
 ) -> Trade:
@@ -162,6 +167,7 @@ async def record_trade(
         direction=direction,
         lots=lots,
         price=price,
+        entry_price=entry_price,
         pnl=pnl,
         opened_at=opened_at or now,
         closed_at=now,
@@ -202,6 +208,16 @@ async def total_realized_pnl(session: AsyncSession, strategy_instance_id: int) -
     stmt = select(Trade).where(Trade.strategy_instance_id == strategy_instance_id)
     trades = (await session.execute(stmt)).scalars().all()
     return sum(t.pnl or 0.0 for t in trades)
+
+
+async def list_trades(session: AsyncSession, strategy_instance_id: int, limit: int | None = None) -> list[Trade]:
+    """Closed trades for one strategy instance, newest first - the full history behind
+    /history, both for demo and real mode (they share the same table, distinguished only
+    by the owning StrategyInstance.mode)."""
+    stmt = select(Trade).where(Trade.strategy_instance_id == strategy_instance_id).order_by(Trade.closed_at.desc())
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    return list((await session.execute(stmt)).scalars().all())
 
 
 async def ensure_alert_capital_base(session: AsyncSession, strategy_instance_id: int, capital_base: float) -> None:
